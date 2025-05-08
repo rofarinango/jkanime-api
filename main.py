@@ -122,6 +122,24 @@ class JKAnime(object):
         for i, server in enumerate(servers):
             server_list.append(get_video_url(server['iframe']))
         return server_list
+    
+    def search_anime(self, query: str = None, page: int = None) -> List[Anime]:
+        """
+        Search in jkanime.net by query.
+        :param query: Query Information: eg. "Boku no Hero Academia"
+        :param page: Page of the information return.
+        :rtype: list[AnimeInfo]
+        """
+        if page is not None and not isinstance(page, int):
+            raise TypeError
+        
+        response = self._scraper.get(f"{SEARCH_URL}{query}/{page}")
+        soup = BeautifulSoup(response.text, "lxml")
+
+        anime_items = []
+        anime_items = soup.find_all('div', class_='anime__item')
+        print(anime_items)
+        #print(soup)
         
 
 # Helper function to extract the name servers from script
@@ -190,19 +208,26 @@ def get_video_url(iframe_url, base_url=BASE_URL):
                 print("JS execution failed:", e)
     
     return None
+    
 # Testing code Main function
 
 if __name__ == "__main__":
+
     # Example usage: vigilante-boku-no-hero-academia-illegals and episode 1
     anime_id = "vigilante-boku-no-hero-academia-illegals"
     episode_number = 1
 
     with JKAnime() as jk:
         try:
-            servers = jk.get_video_servers(anime_id, episode_number)
-            print("Download links found:")
-            print(servers)
-            for server in servers:
-                print(server)
+            # Test search_anime method
+            print("\n=== Testing Search Anime ===")
+            search_results = jk.search_anime(query="boku no hero", page = 1)
+            print("Search results:")
+            
+            # servers = jk.get_video_servers(anime_id, episode_number)
+            # print("Download links found:")
+            # print(servers)
+            # for server in servers:
+            #     print(server)
         except Exception as e:
             print(f"Error: {e}")
