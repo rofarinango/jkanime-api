@@ -138,7 +138,24 @@ class JKAnime(object):
 
         anime_items = []
         anime_items = soup.find_all('div', class_='anime__item')
-        print(anime_items)
+        results = []
+
+        for item in anime_items:
+            # Extract info from anime
+            # Id
+            title_id = item.find('h5')
+            if title_id:
+                a_tag = title_id.find('a')
+                if a_tag:
+                    href = a_tag.get('href')
+                    id = href.strip('/').split('/')[-1]
+                    print(f"Found ID: {id}")
+            # Title
+            title_elem = item.find('div', class_='title')
+            if title_elem:
+                title_text = title_elem.text.strip()
+                print(f"Found title: {title_text}")
+        #print(anime_items)
         #print(soup)
         
 
@@ -221,7 +238,7 @@ if __name__ == "__main__":
         try:
             # Test search_anime method
             print("\n=== Testing Search Anime ===")
-            search_results = jk.search_anime(query="boku no hero", page = 1)
+            search_results = jk.search_anime(query="boku no hero", page = 3)
             print("Search results:")
             
             # servers = jk.get_video_servers(anime_id, episode_number)
