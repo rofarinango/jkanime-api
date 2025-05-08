@@ -99,13 +99,7 @@ class JKAnime(object):
         soup = BeautifulSoup(response.text, "lxml")
         scripts = soup.find_all("script")
 
-        #print(soup)
-
-        server_names = extract_server_names_from_script(response.text)
-        print(server_names)
-        servers = []
-
-                
+        servers = []              
         # Find the script with 'var video = [];'
         for script in scripts:
             content = script.string or script.text
@@ -124,17 +118,11 @@ class JKAnime(object):
                         if server['server'] != 'Mediafire': #Skip as is direct donwload
                             iframe_url = f"/c1.php?u={server['remote']}&s={server['server'].lower()}"
                             servers.append({'iframe': iframe_url})
-         
         server_list = []
         for i, server in enumerate(servers):
-            name = server_names[i] if i < len(server_names) else f"Server {i+1}"
-            #print(server['iframe'])
-            server_list.append({'server': name, 'iframe': get_video_url(server['iframe'])})
-
-        
+            server_list.append(get_video_url(server['iframe']))
         return server_list
         
-
 
 # Helper function to extract the name servers from script
 def extract_server_names_from_script(response):
@@ -148,7 +136,7 @@ def extract_server_names_from_script(response):
 
 
 # Helper function to get the video url requesting the underlying iframe page
-def get_video_url(iframe_url, base_url="https://jkanime.net"):
+def get_video_url(iframe_url, base_url=BASE_URL):
     # Step 1: Fetch the iframe page
     scraper = cloudscraper.create_scraper()
     # If the iframe is relative, prepend the base_url
@@ -164,23 +152,23 @@ def get_video_url(iframe_url, base_url="https://jkanime.net"):
     }
     response = scraper.get(iframe_url, headers=headers)
     soup = BeautifulSoup(response.text, "lxml")
-    print("##### FROM_GET_VIDEO_URL ########")
-    print(soup)
 
     # Step 1.5: Check if the response contains an iframe with a direct video URL
+    # Get server name from script tag
+    script_tag = soup.find('script')
+    if script_tag:
+        script_content = script_tag.string or script_tag.text
+        match = re.search(r"var servername = \"([^\"]+)\";", script_content)
+        if match:
+            server_name = match.group(1)
+        else:
+            server_name = None
+
     iframe = soup.find('iframe')
     if iframe and iframe.has_attr('src'):
         video_url = iframe['src']
         if video_url.startswith('http'):
-            return video_url
-
-    # Step 2: Try to find a <video> tag
-    video = soup.find('video')
-    #print(video)
-    if video:
-        source = video.find('source')
-        if source and source.has_attr('src'):
-            return source['src']
+            return {'server': server_name, 'url': video_url}
     
     # Step 3: If not, try extract and run the obfuscated JS
     scripts = soup.find('script')
@@ -191,13 +179,13 @@ def get_video_url(iframe_url, base_url="https://jkanime.net"):
             # regex it out:
             match = re.search(r"ss\s*=\s*['\"]([^'\"]+)['\"]", script_content)
             if match:
-                return match.group(1)
+                return {'server': server_name, 'url': match.group(1)}
             # Otherwise, try to run the JS (if it's not too obfuscated)
             try:
                 context = js2py.EvalJs()
                 context.execute(script_content)
                 if hasattr(context, 'ss'):
-                    return context.__subclasshook__
+                    return {'server': server_name, 'url': context.__subclasshook__ }
             except Exception as e:
                 print("JS execution failed:", e)
     
@@ -213,7 +201,8 @@ if __name__ == "__main__":
         try:
             servers = jk.get_video_servers(anime_id, episode_number)
             print("Download links found:")
-            for link in servers:
-                print(f"Server: {link['server']}, URL: {link['iframe']}")
+            print(servers)
+            for server in servers:
+                print(server)
         except Exception as e:
             print(f"Error: {e}")
