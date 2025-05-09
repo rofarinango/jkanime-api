@@ -41,9 +41,8 @@ class Episode:
 @dataclass
 class Anime:
     id: Union[str, int]
-    title: str
-    poster: Optional[str] = None
-    banner: Optional[str] = None
+    title: str 
+    image: Optional[str] = None
     synopsis: Optional[str] = None
     rating: Optional[str] = None
     genres: Optional[str] = None
@@ -155,6 +154,11 @@ class JKAnime(object):
             if title_elem:
                 title_text = title_elem.text.strip()
                 print(f"Found title: {title_text}")
+            # Image
+            img_elem = item.find('div', class_="anime__item__pic")
+            if img_elem:
+                img_url = img_elem.get('data-setbg')
+                print(f"Found image url: {img_url}")
         #print(anime_items)
         #print(soup)
         
