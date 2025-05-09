@@ -159,6 +159,12 @@ class JKAnime(object):
             if img_elem:
                 img_url = img_elem.get('data-setbg')
                 print(f"Found image url: {img_url}")
+            # Synopsis
+            p_elem = item.find('p')
+            if p_elem:
+                synopsis = p_elem.text.strip()
+                print(f"Found summary: {synopsis}")
+
         #print(anime_items)
         #print(soup)
         
