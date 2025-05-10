@@ -164,8 +164,14 @@ class JKAnime(object):
             if p_elem:
                 synopsis = p_elem.text.strip()
                 print(f"Found summary: {synopsis}")
+            
+            # Type (Anime, Movie, OVA)
+            li_elem = item.find('li', class_="anime")
+            if li_elem:
+                type = li_elem.text.strip()
+                print(type)
 
-        #print(anime_items)
+        print(anime_items)
         #print(soup)
         
 
