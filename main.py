@@ -44,11 +44,7 @@ class Anime:
     title: str 
     image: Optional[str] = None
     synopsis: Optional[str] = None
-    rating: Optional[str] = None
-    genres: Optional[str] = None
-    debut: Optional[str] = None
     type: Optional[str] = None
-    episodes: Optional[List[Episode]] = None
     
 @dataclass
 class DownloadLink:
@@ -170,8 +166,13 @@ class JKAnime(object):
             if li_elem:
                 type = li_elem.text.strip()
                 print(type)
+            
+            # Create anime object with all the obtained parameters
+            anime = Anime(id, title_text, img_url, synopsis, type)
+            results.append(anime)
+            
 
-        print(anime_items)
+        return results
         #print(soup)
         
 
@@ -256,6 +257,11 @@ if __name__ == "__main__":
             print("\n=== Testing Search Anime ===")
             search_results = jk.search_anime(query="boku no hero", page = 3)
             print("Search results:")
+            for anime in search_results:
+                print(f"ID: {anime.id}")
+                print(f"Title: {anime.title}")
+                print(f"Type: {anime.type}")
+                print(f"Poster: {anime.image}")
             
             # servers = jk.get_video_servers(anime_id, episode_number)
             # print("Download links found:")
