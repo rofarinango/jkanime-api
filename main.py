@@ -41,15 +41,10 @@ class Episode:
 @dataclass
 class Anime:
     id: Union[str, int]
-    title: str
-    poster: Optional[str] = None
-    banner: Optional[str] = None
+    title: str 
+    image: Optional[str] = None
     synopsis: Optional[str] = None
-    rating: Optional[str] = None
-    genres: Optional[str] = None
-    debut: Optional[str] = None
     type: Optional[str] = None
-    episodes: Optional[List[Episode]] = None
     
 @dataclass
 class DownloadLink:
@@ -122,6 +117,63 @@ class JKAnime(object):
         for i, server in enumerate(servers):
             server_list.append(get_video_url(server['iframe']))
         return server_list
+    
+    def search_anime(self, query: str = None, page: int = None) -> List[Anime]:
+        """
+        Search in jkanime.net by query.
+        :param query: Query Information: eg. "Boku no Hero Academia"
+        :param page: Page of the information return.
+        :rtype: list[AnimeInfo]
+        """
+        if page is not None and not isinstance(page, int):
+            raise TypeError
+        
+        response = self._scraper.get(f"{SEARCH_URL}{query}/{page}")
+        soup = BeautifulSoup(response.text, "lxml")
+
+        anime_items = []
+        anime_items = soup.find_all('div', class_='anime__item')
+        results = []
+
+        for item in anime_items:
+            # Extract info from anime
+            # Id
+            title_id = item.find('h5')
+            if title_id:
+                a_tag = title_id.find('a')
+                if a_tag:
+                    href = a_tag.get('href')
+                    id = href.strip('/').split('/')[-1]
+                    print(f"Found ID: {id}")
+            # Title
+            title_elem = item.find('div', class_='title')
+            if title_elem:
+                title_text = title_elem.text.strip()
+                print(f"Found title: {title_text}")
+            # Image
+            img_elem = item.find('div', class_="anime__item__pic")
+            if img_elem:
+                img_url = img_elem.get('data-setbg')
+                print(f"Found image url: {img_url}")
+            # Synopsis
+            p_elem = item.find('p')
+            if p_elem:
+                synopsis = p_elem.text.strip()
+                print(f"Found summary: {synopsis}")
+            
+            # Type (Anime, Movie, OVA)
+            li_elem = item.find('li', class_="anime")
+            if li_elem:
+                type = li_elem.text.strip()
+                print(type)
+            
+            # Create anime object with all the obtained parameters
+            anime = Anime(id, title_text, img_url, synopsis, type)
+            results.append(anime)
+            
+
+        return results
+        #print(soup)
         
 
 # Helper function to extract the name servers from script
@@ -190,19 +242,31 @@ def get_video_url(iframe_url, base_url=BASE_URL):
                 print("JS execution failed:", e)
     
     return None
+    
 # Testing code Main function
 
 if __name__ == "__main__":
+
     # Example usage: vigilante-boku-no-hero-academia-illegals and episode 1
     anime_id = "vigilante-boku-no-hero-academia-illegals"
     episode_number = 1
 
     with JKAnime() as jk:
         try:
-            servers = jk.get_video_servers(anime_id, episode_number)
-            print("Download links found:")
-            print(servers)
-            for server in servers:
-                print(server)
+            # Test search_anime method
+            print("\n=== Testing Search Anime ===")
+            search_results = jk.search_anime(query="boku no hero", page = 3)
+            print("Search results:")
+            for anime in search_results:
+                print(f"ID: {anime.id}")
+                print(f"Title: {anime.title}")
+                print(f"Type: {anime.type}")
+                print(f"Poster: {anime.image}")
+            
+            # servers = jk.get_video_servers(anime_id, episode_number)
+            # print("Download links found:")
+            # print(servers)
+            # for server in servers:
+            #     print(server)
         except Exception as e:
             print(f"Error: {e}")
