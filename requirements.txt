@@ -2,3 +2,5 @@ js2py
 cloudscraper
 lxml
 beautifulsoup4
+Flask
+httpie
