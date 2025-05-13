@@ -7,6 +7,22 @@ from enum import Flag, auto
 from typing import Dict, List, Optional, Type, Union
 from bs4 import BeautifulSoup, Tag
 from urllib.parse import unquote, urlencode
+from flask import Flask, jsonify, request
+from http import HTTPStatus
+
+app = Flask(__name__)
+
+@app.route('/animes/<string:query>/<int:page>', methods=['GET'])
+def get_anime(query, page):
+    with JKAnime() as jk:
+        try:
+            search_results = jk.search_anime(query, page)
+            if search_results:
+                return jsonify({'data': search_results})
+            return jsonify({'message': 'animes not found'}), HTTPStatus.NOT_FOUND
+        except Exception as e:
+            print(f"Error: {e}")
+            
 
 class AnimeFLVParseError(Exception):
     pass
@@ -242,31 +258,35 @@ def get_video_url(iframe_url, base_url=BASE_URL):
                 print("JS execution failed:", e)
     
     return None
-    
-# Testing code Main function
 
-if __name__ == "__main__":
+# Testing main flask app
 
-    # Example usage: vigilante-boku-no-hero-academia-illegals and episode 1
-    anime_id = "vigilante-boku-no-hero-academia-illegals"
-    episode_number = 1
+if __name__ == '__main__':
+    app.run()
+# # Testing code Main function
 
-    with JKAnime() as jk:
-        try:
-            # Test search_anime method
-            print("\n=== Testing Search Anime ===")
-            search_results = jk.search_anime(query="boku no hero", page = 3)
-            print("Search results:")
-            for anime in search_results:
-                print(f"ID: {anime.id}")
-                print(f"Title: {anime.title}")
-                print(f"Type: {anime.type}")
-                print(f"Poster: {anime.image}")
+# if __name__ == "__main__":
+
+#     # Example usage: vigilante-boku-no-hero-academia-illegals and episode 1
+#     anime_id = "vigilante-boku-no-hero-academia-illegals"
+#     episode_number = 1
+
+#     with JKAnime() as jk:
+#         try:
+#             # Test search_anime method
+#             print("\n=== Testing Search Anime ===")
+#             search_results = jk.search_anime(query="boku no hero", page = 3)
+#             print("Search results:")
+#             for anime in search_results:
+#                 print(f"ID: {anime.id}")
+#                 print(f"Title: {anime.title}")
+#                 print(f"Type: {anime.type}")
+#                 print(f"Poster: {anime.image}")
             
-            # servers = jk.get_video_servers(anime_id, episode_number)
-            # print("Download links found:")
-            # print(servers)
-            # for server in servers:
-            #     print(server)
-        except Exception as e:
-            print(f"Error: {e}")
+#             # servers = jk.get_video_servers(anime_id, episode_number)
+#             # print("Download links found:")
+#             # print(servers)
+#             # for server in servers:
+#             #     print(server)
+#         except Exception as e:
+#             print(f"Error: {e}")
