@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup, Tag
 from urllib.parse import unquote, urlencode
 from flask import Flask, jsonify, request
 from http import HTTPStatus
+from models.anime import Anime
 
 app = Flask(__name__)
 
@@ -47,20 +48,14 @@ GENRE_URL="https://jkanime.net/genero/"
 MOVIES_URL= "https://jkanime.net/tipo/pelicula"
 OVAS_URL= "https://jkanime.net/tipo/ova"
 
-
-@dataclass
-class Episode:
-    id: Union[str, int]
-    anime: str
-    image_preview: Optional[str] = None
     
-@dataclass
+""" @dataclass
 class Anime:
     id: Union[str, int]
     title: str 
     image: Optional[str] = None
     synopsis: Optional[str] = None
-    type: Optional[str] = None
+    type: Optional[str] = None """
     
 @dataclass
 class DownloadLink:
