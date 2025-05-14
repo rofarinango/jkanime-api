@@ -1,6 +1,7 @@
 import cloudscraper
 import js2py
 import re
+import json
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional, Type
 from types import TracebackType
@@ -17,7 +18,7 @@ class JKAnimeScraper:
     def close(self) -> None:
         self._scraper.close()
     
-    def __enter__(self) -> "JKAnime":
+    def __enter__(self) -> "JKAnimeScraper":
         return self
     
     def __exit__(
