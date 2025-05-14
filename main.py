@@ -39,15 +39,6 @@ def parse_table(table: Tag):
         
         rows.append({h: x for h, x in zip(columns, values)})
     return rows
-
-BASE_URL= "https://jkanime.net/"
-SEARCH_URL = "https://jkanime.net/buscar/"
-SEARCH_BY_CHARACTER_URL = "https://jkanime.net/letra/"
-SCHEDULE_URL= "https://jkanime.net/horario/"
-GENRE_URL="https://jkanime.net/genero/"
-MOVIES_URL= "https://jkanime.net/tipo/pelicula"
-OVAS_URL= "https://jkanime.net/tipo/ova"
-
     
 """ @dataclass
 class Anime:
