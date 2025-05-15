@@ -3,4 +3,5 @@ cloudscraper
 lxml
 beautifulsoup4
 Flask
+Flask-RESTful
 httpie

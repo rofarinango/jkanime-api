@@ -1,77 +1,16 @@
-from types import TracebackType
 import cloudscraper
 import js2py
-import re, json
-from dataclasses import dataclass
-from enum import Flag, auto
-from typing import Dict, List, Optional, Type, Union
-from bs4 import BeautifulSoup, Tag
-from urllib.parse import unquote, urlencode
-from flask import Flask, jsonify, request
-from http import HTTPStatus
-
-app = Flask(__name__)
-
-@app.route('/animes/<string:query>/<int:page>', methods=['GET'])
-def get_anime(query, page):
-    with JKAnime() as jk:
-        try:
-            search_results = jk.search_anime(query, page)
-            if search_results:
-                return jsonify({'data': search_results})
-            return jsonify({'message': 'animes not found'}), HTTPStatus.NOT_FOUND
-        except Exception as e:
-            print(f"Error: {e}")
-            
-
-class AnimeFLVParseError(Exception):
-    pass
-
-def parse_table(table: Tag):
-    columns = list([x.string for x in table.thead.tr.find_all("th")])
-    rows = []
-
-    for row in table.tbody.find_all("tr"):
-        values = row.find_all("td")
-        if len(values) != len(columns):
-            raise AnimeFLVParseError("Don't match values size with columns size")
-        
-        rows.append({h: x for h, x in zip(columns, values)})
-    return rows
-
-BASE_URL= "https://jkanime.net/"
-SEARCH_URL = "https://jkanime.net/buscar/"
-SEARCH_BY_CHARACTER_URL = "https://jkanime.net/letra/"
-SCHEDULE_URL= "https://jkanime.net/horario/"
-GENRE_URL="https://jkanime.net/genero/"
-MOVIES_URL= "https://jkanime.net/tipo/pelicula"
-OVAS_URL= "https://jkanime.net/tipo/ova"
+import re
+import json
+from bs4 import BeautifulSoup
+from typing import List, Dict, Optional, Type
+from types import TracebackType
+from models.anime import Anime
+from models.episode import Episode
+from core.constants import BASE_URL, SEARCH_URL
 
 
-@dataclass
-class Episode:
-    id: Union[str, int]
-    anime: str
-    image_preview: Optional[str] = None
-    
-@dataclass
-class Anime:
-    id: Union[str, int]
-    title: str 
-    image: Optional[str] = None
-    synopsis: Optional[str] = None
-    type: Optional[str] = None
-    
-@dataclass
-class DownloadLink:
-    server: str
-    url: str
-
-class EpisodeFormat(Flag):
-    Subtitled = auto()
-    Dubbed = auto()
-
-class JKAnime(object):
+class JKAnimeScraper:
     def __init__(self, *args, **kwargs):
         session = kwargs.get("session", None)
         self._scraper = cloudscraper.create_scraper(session)
@@ -79,7 +18,7 @@ class JKAnime(object):
     def close(self) -> None:
         self._scraper.close()
     
-    def __enter__(self) -> "JKAnime":
+    def __enter__(self) -> "JKAnimeScraper":
         return self
     
     def __exit__(
@@ -94,7 +33,6 @@ class JKAnime(object):
             self,
             id: str,
             episode: int,
-            format: EpisodeFormat = EpisodeFormat.Subtitled,
             **kwargs,
     ) -> List[Dict[str, str]]:
         """
@@ -160,28 +98,24 @@ class JKAnime(object):
                 if a_tag:
                     href = a_tag.get('href')
                     id = href.strip('/').split('/')[-1]
-                    print(f"Found ID: {id}")
             # Title
             title_elem = item.find('div', class_='title')
             if title_elem:
                 title_text = title_elem.text.strip()
-                print(f"Found title: {title_text}")
             # Image
             img_elem = item.find('div', class_="anime__item__pic")
             if img_elem:
                 img_url = img_elem.get('data-setbg')
-                print(f"Found image url: {img_url}")
+
             # Synopsis
             p_elem = item.find('p')
             if p_elem:
                 synopsis = p_elem.text.strip()
-                print(f"Found summary: {synopsis}")
             
             # Type (Anime, Movie, OVA)
             li_elem = item.find('li', class_="anime")
             if li_elem:
                 type = li_elem.text.strip()
-                print(type)
             
             # Create anime object with all the obtained parameters
             anime = Anime(id, title_text, img_url, synopsis, type)
@@ -189,19 +123,6 @@ class JKAnime(object):
             
 
         return results
-        #print(soup)
-        
-
-# Helper function to extract the name servers from script
-def extract_server_names_from_script(response):
-    # Find the JS variable
-    match = re.search(r"var servers = (\[.*?\]);", response, re.DOTALL)
-    if not match:
-        return []
-    servers_json = match.group(1)
-    servers = json.loads(servers_json)
-    return [server['server'] for server in servers]
-
 
 # Helper function to get the video url requesting the underlying iframe page
 def get_video_url(iframe_url, base_url=BASE_URL):
@@ -258,35 +179,3 @@ def get_video_url(iframe_url, base_url=BASE_URL):
                 print("JS execution failed:", e)
     
     return None
-
-# Testing main flask app
-
-if __name__ == '__main__':
-    app.run()
-# # Testing code Main function
-
-# if __name__ == "__main__":
-
-#     # Example usage: vigilante-boku-no-hero-academia-illegals and episode 1
-#     anime_id = "vigilante-boku-no-hero-academia-illegals"
-#     episode_number = 1
-
-#     with JKAnime() as jk:
-#         try:
-#             # Test search_anime method
-#             print("\n=== Testing Search Anime ===")
-#             search_results = jk.search_anime(query="boku no hero", page = 3)
-#             print("Search results:")
-#             for anime in search_results:
-#                 print(f"ID: {anime.id}")
-#                 print(f"Title: {anime.title}")
-#                 print(f"Type: {anime.type}")
-#                 print(f"Poster: {anime.image}")
-            
-#             # servers = jk.get_video_servers(anime_id, episode_number)
-#             # print("Download links found:")
-#             # print(servers)
-#             # for server in servers:
-#             #     print(server)
-#         except Exception as e:
-#             print(f"Error: {e}")
