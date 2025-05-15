@@ -98,28 +98,24 @@ class JKAnimeScraper:
                 if a_tag:
                     href = a_tag.get('href')
                     id = href.strip('/').split('/')[-1]
-                    print(f"Found ID: {id}")
             # Title
             title_elem = item.find('div', class_='title')
             if title_elem:
                 title_text = title_elem.text.strip()
-                print(f"Found title: {title_text}")
             # Image
             img_elem = item.find('div', class_="anime__item__pic")
             if img_elem:
                 img_url = img_elem.get('data-setbg')
-                print(f"Found image url: {img_url}")
+
             # Synopsis
             p_elem = item.find('p')
             if p_elem:
                 synopsis = p_elem.text.strip()
-                print(f"Found summary: {synopsis}")
             
             # Type (Anime, Movie, OVA)
             li_elem = item.find('li', class_="anime")
             if li_elem:
                 type = li_elem.text.strip()
-                print(type)
             
             # Create anime object with all the obtained parameters
             anime = Anime(id, title_text, img_url, synopsis, type)
