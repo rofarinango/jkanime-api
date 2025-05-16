@@ -3,7 +3,7 @@ import js2py
 import re
 import json
 from bs4 import BeautifulSoup
-from typing import List, Dict, Optional, Type
+from typing import List, Dict, Optional, Type, Union
 from types import TracebackType
 from models.anime import Anime
 from models.episode import Episode
@@ -44,7 +44,56 @@ class JKAnimeScraper:
         :rtype: list
         """
 
-        response = self._scraper.get(f"{BASE_URL}{id}/{episode}")
+        try:
+            response = self._scraper.get(f"{BASE_URL}{id}/{episode}")
+            soup = BeautifulSoup(response.text, "lxml")
+
+            # Find the specific script containing video information
+            target_script = soup.find("script", string=lambda s: s and "var video = [];" in s)
+            print('THIS IS THE VIDEO TAAARGET SCRIPT')
+            print(target_script)
+            if not target_script:
+                return []
+            
+            content = target_script.string or target_script.text
+            servers = []
+
+            # Extract iframe URLs in one pass
+            iframe_matches = re.findall(r"video\[(\d+)\] = '<iframe class=\"player_conte\" src=\"([^\"]+)\"", content)
+            servers.extend([{'iframe': url} for _, url in iframe_matches])
+
+            # Extract servers array in one pass
+            servers_match = re.search(r"var servers = (\[.*?\]);", content, re.DOTALL)
+            if servers_match:
+                try:
+                    servers_data = json.loads(servers_match.group(1))
+                    for server in servers_data:
+                        iframe_url = f"/c1.php?u={server['remote']}&s={server['server'].lower()}"
+                        servers.append({'iframe': iframe_url})
+                except json.JSONDecodeError:
+                    pass
+
+            # Process servers sequentially
+            server_list = []
+            for server in servers:
+                video_url = self._get_video_url(server['iframe'])
+                if video_url and video_url.get('server') is not None:
+                    server_list.append(video_url)
+
+            # Remove duplicates while preserving order
+            seen_urls = set()
+            unique_servers = []
+            for server in server_list:
+                if server['url'] not in seen_urls:
+                    seen_urls.add(server['url'])
+                    unique_servers.append(server)
+            return unique_servers
+        
+        except Exception as e:
+            print(f"Error getting video servers: {str(e)}")
+            return []
+
+        """ response = self._scraper.get(f"{BASE_URL}{id}/{episode}")
         soup = BeautifulSoup(response.text, "lxml")
         scripts = soup.find_all("script")
 
@@ -70,7 +119,72 @@ class JKAnimeScraper:
         server_list = []
         for i, server in enumerate(servers):
             server_list.append(get_video_url(server['iframe']))
-        return server_list
+        return server_list """
+
+    def _get_video_url(self, iframe_url: str) -> Optional[Dict[str, str]]:
+        """
+        Get video URL from an iframe URL.
+        Returns a dictionary containing server name and video URL.
+        """
+        try:
+            if iframe_url.startswith('/'):
+                iframe_url = BASE_URL.rstrip('/') + iframe_url
+
+            response = self._scraper.get(
+                iframe_url,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Referer': BASE_URL,
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                }
+            )
+            soup = BeautifulSoup(response.text, "lxml")
+
+            # Extract server name
+            server_name = None
+            script_tag = soup.find('script')
+            if script_tag:
+                script_content = script_tag.string or script_tag.text
+                match = re.search(r"var servername = \"([^\"]+)\";", script_content)
+                if match:
+                    server_name = match.group(1)
+
+            # Try to get video URL from iframe first
+            iframe = soup.find('iframe')
+            if iframe and iframe.has_attr('src'):
+                video_url = iframe['src']
+                if video_url.startswith('http'):
+                    return {'server': server_name, 'url': video_url}
+
+            # Try to extract video URL from scripts
+            scripts = soup.find_all('script')
+            for script in scripts:
+                content = script.string or script.text
+                if not content:
+                    continue
+
+                # Try direct URL extraction first
+                match = re.search(r"ss\s*=\s*['\"]([^'\"]+)['\"]", content)
+                if match:
+                    return {'server': server_name, 'url': match.group(1)}
+
+                # Try JS execution as last resort
+                try:
+                    context = js2py.EvalJs()
+                    context.execute(content)
+                    if hasattr(context, 'ss'):
+                        return {'server': server_name, 'url': context.ss}
+                except Exception:
+                    continue
+
+            return None
+
+        except Exception as e:
+            print(f"Error getting video URL: {str(e)}")
+            return None
     
     def search_anime(self, query: str = None, page: int = None) -> List[Anime]:
         """
@@ -123,7 +237,35 @@ class JKAnimeScraper:
             
 
         return results
+    def get_episodes_by_anime_id(self, anime_id: Union[str, int], page: int) -> Dict:
+        response = self._scraper.get(f"{BASE_URL}{anime_id}")
+        soup = BeautifulSoup(response.text, "lxml")
+        print(soup)
+        print("###### PAGE NUMBER ############")
+        anime_pagination = soup.find("div", class_='anime__pagination')
+        # Find the a tag with the pagination number of page input
+        pages = anime_pagination.find_all("a", class_="numbers")
+        if pages:
+            for item in pages:
+                if item.get('href') == f"#pag{page}":
+                    episode_range = item.text.strip()
+                    if episode_range:
+                        start, end = map(int, episode_range.split('-'))
+                        episode_numbers = list(range(start, end+1))
+                        print(f"Episodes for page {page}: {episode_numbers}")
+            # Call get_video_servers to get all urls from each episode
+            episodes = []
+            pass
+     
+        """ for number in episode_numbers:
+             servers_list = self.get_video_servers(anime_id, number)
+             print("######### SERVEEEERSS #########")
+             print(servers_list)
+             episodes.append(servers_list)
+         print(episodes) """
+        
 
+""" 
 # Helper function to get the video url requesting the underlying iframe page
 def get_video_url(iframe_url, base_url=BASE_URL):
     # Step 1: Fetch the iframe page
@@ -179,3 +321,4 @@ def get_video_url(iframe_url, base_url=BASE_URL):
                 print("JS execution failed:", e)
     
     return None
+ """

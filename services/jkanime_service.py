@@ -1,9 +1,10 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict
 from models.anime import Anime
 from models.episode import Episode
 from utils.scraper import JKAnimeScraper
 
 class JKAnimeService:
+    EPISODES_PER_PAGE = 12
     def __init__(self):
         self.__scraper = JKAnimeScraper()
     
@@ -17,5 +18,20 @@ class JKAnimeService:
         """
         Get video servers for a specific anime episode
         """
-        return self._scraper.get_video_servers(anime_id, episode)
+        return self.__scraper.get_video_servers(anime_id, episode)
+    
+    def get_episodes_by_anime_id(self, anime_id: Union[str, int], page: int = 1) -> Dict:
+        """
+        Get episodes for an anime with pagination
+        Returns a dictionary containing episodes and pagination info
+        """
+        try:
+            # Calculate episode ranges
+            start_episode = ((page - 1) * self.EPISODES_PER_PAGE) + 1
+            end_episode = page * self.EPISODES_PER_PAGE
+
+            # Scrap episodes for the current page
+            episodes = self.__scraper.get_episodes_by_anime_id(anime_id, page)
+        except Exception as e:
+            raise Exception(f"Error fetching episodes: {str(e)}")
 
