@@ -1,19 +1,39 @@
 import cloudscraper
-import js2py
 import re
 import json
+import aiohttp
+import asyncio
+import time
 from bs4 import BeautifulSoup
-from typing import List, Dict, Optional, Type
+from typing import List, Dict, Optional, Type, Union
 from types import TracebackType
 from models.anime import Anime
 from models.episode import Episode
 from core.constants import BASE_URL, SEARCH_URL
-
+from async_lru import alru_cache
 
 class JKAnimeScraper:
+    _instance = None
+    _initialized = False
+
+    def __new__(cls, *args, **kargs):
+        if cls._instance is None:
+            cls._instance = super(JKAnimeScraper, cls).__new__(cls)
+        return cls._instance
+    
     def __init__(self, *args, **kwargs):
-        session = kwargs.get("session", None)
-        self._scraper = cloudscraper.create_scraper(session)
+        if not self._initialized:
+            session = kwargs.get("session", None)
+            self._scraper = cloudscraper.create_scraper(session)
+            self._headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Referer': BASE_URL,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+            }
+            self._initialized = True
 
     def close(self) -> None:
         self._scraper.close()
@@ -29,7 +49,8 @@ class JKAnimeScraper:
     ) -> None:
         self.close()
     
-    def get_video_servers(
+    @alru_cache(maxsize=100)
+    async def get_video_servers(
             self,
             id: str,
             episode: int,
@@ -44,7 +65,49 @@ class JKAnimeScraper:
         :rtype: list
         """
 
-        response = self._scraper.get(f"{BASE_URL}{id}/{episode}")
+        try:
+             # Add cache hit/miss debug
+            cache_info = self.get_video_servers.cache_info()
+            print(f"DEBUG: Cache stats - Hits: {cache_info.hits}, Misses: {cache_info.misses}, Size: {cache_info.currsize}")
+            
+            print(f"DEBUG: Fetching data for {id} episode {episode}")
+                
+            response = self._scraper.get(f"{BASE_URL}{id}/{episode}")
+            soup = BeautifulSoup(response.text, "lxml")
+
+            # Find the specific script containing video information
+            target_script = soup.find("script", string=lambda s: s and "var video = [];" in s)
+            if not target_script:
+                return []
+            
+            content = target_script.string or target_script.text
+            servers = []
+
+            # Extract servers array in one pass
+            servers_match = re.search(r"var servers = (\[.*?\]);", content, re.DOTALL)
+            if servers_match:
+                try:
+                    servers_data = json.loads(servers_match.group(1))
+                    for server in servers_data:
+                        iframe_url = f"/c1.php?u={server['remote']}&s={server['server'].lower()}"
+                        servers.append({'iframe': iframe_url})
+                except json.JSONDecodeError:
+                    pass
+
+            # Process servers concurrently
+            tasks = []
+            for server in servers:
+                task = asyncio.create_task(self._get_video_url_async(server['iframe']))
+                tasks.append(task)
+            
+            results = await asyncio.gather(*tasks)
+            return results
+        
+        except Exception as e:
+            print(f"Error getting video servers: {str(e)}")
+            return []
+
+        """ response = self._scraper.get(f"{BASE_URL}{id}/{episode}")
         soup = BeautifulSoup(response.text, "lxml")
         scripts = soup.find_all("script")
 
@@ -70,8 +133,55 @@ class JKAnimeScraper:
         server_list = []
         for i, server in enumerate(servers):
             server_list.append(get_video_url(server['iframe']))
-        return server_list
+        return server_list """
+
+    @alru_cache(maxsize=100)
+    async def _get_video_url_async(self, iframe_url: str) -> Optional[Dict[str, str]]:
+        """
+        Get video URL from an iframe URL.
+        Returns a dictionary containing server name and video URL.
+        """
+        try:
+            print(f"DEBUG: Fetching data for {iframe_url}")
+
+            
+            if iframe_url.startswith('/'):
+                iframe_url = BASE_URL.rstrip('/') + iframe_url
+            
+            # Create a new session for each request
+            async with aiohttp.ClientSession() as session:
+                async with session.get(iframe_url, headers=self._headers) as response:
+                    html = await response.text()
+                    soup = BeautifulSoup(html, "lxml")
+
+                    # Extract server name
+                    server_name = None
+                    script_tag = soup.find('script')
+                    if script_tag:
+                        script_content = script_tag.string or script_tag.text
+                        match = re.search(r"var servername = \"([^\"]+)\";", script_content)
+                        if match:
+                            server_name = match.group(1)
+
+                    # Try to get video URL from iframe first
+                    iframe = soup.find('iframe')
+                    if iframe and iframe.has_attr('src'):
+                        video_url = iframe['src'].strip()
+                        if video_url.startswith('http'):
+                            return {'server': server_name, 'url': video_url}
+                        
+                    return None
+
+        except Exception as e:
+            print(f"Error getting video URL: {str(e)}")
+            return None
     
+    def clear_cache(self):
+        """Clear cache"""
+        self.get_video_servers.cache_clear()
+        self._get_video_url_async.cache_clear()
+
+
     def search_anime(self, query: str = None, page: int = None) -> List[Anime]:
         """
         Search in jkanime.net by query.
@@ -120,10 +230,78 @@ class JKAnimeScraper:
             # Create anime object with all the obtained parameters
             anime = Anime(id, title_text, img_url, synopsis, type)
             results.append(anime)
-            
-
         return results
+    
+    @alru_cache(maxsize=100)
+    async def get_episodes_by_anime_id(self, anime_id: Union[str, int], page: int) -> Dict:
+        try:
+            response = self._scraper.get(f"{BASE_URL}{anime_id}")
+            soup = BeautifulSoup(response.text, "lxml")
+            anime_pagination = soup.find("div", class_='anime__pagination')
+            if not anime_pagination:
+                print(f"DEBUG: No pagination found for {anime_id}")
+                return {'episodes': [], 'pagination': {}}
+            # Find the a tag with the pagination number of page input
+            pages = anime_pagination.find_all("a", class_="numbers")
+            if not pages:
+                print(f"DEBUG: No page numbers found for {anime_id}")
+                return {'episodes': [], 'pagination': {}}
 
+            # Find the requested page
+            target_page = None
+            for item in pages:
+                if item.get('href') == f"#pag{page}":
+                    target_page = item
+                    break
+
+            if not target_page:
+                print(f"DEBUG: Page {page} not found for {anime_id}")
+                return {'episodes': [], 'pagination': {}}
+
+            # Get episode range
+            episode_range = target_page.text.strip()
+            if not episode_range:
+                print(f"DEBUG: No episode range found for page {page}")
+                return {'episodes': [], 'pagination': {}}
+
+            try:
+                start, end = map(int, episode_range.split('-'))
+                episode_numbers = list(range(start, end+1))
+                print(f"DEBUG: Episodes for page {page}: {episode_numbers}")
+            except ValueError as e:
+                print(f"DEBUG: Invalid episode range format: {episode_range}")
+                return {'episodes': [], 'pagination': {}}
+
+             # Process episodes sequentially with a small delay
+            episodes = []
+            for number in episode_numbers:
+                try:
+                    # Add a small delay between requests (0.5 seconds)
+                    await asyncio.sleep(0.5)
+                    episode_data = await self.get_video_servers(anime_id, number)
+                    if episode_data:  # Only add if we got data
+                        episodes.append(episode_data)
+                    print(f"DEBUG: Got data for episode {number}")
+                except Exception as e:
+                    print(f"DEBUG: Error getting episode {number}: {str(e)}")
+                    continue
+
+            return {
+                'episodes': episodes,
+                'pagination': {
+                    'current_page': page,
+                    'total_episodes': len(episode_numbers),
+                    'episode_range': f"{start}-{end}"
+                }
+            }
+
+        except Exception as e:
+            print(f"Error in get_episodes_by_anime_id: {str(e)}")
+            print(f"DEBUG: Full error details: {e.__class__.__name__}: {str(e)}")
+            return {'episodes': [], 'pagination': {}}
+        
+
+""" 
 # Helper function to get the video url requesting the underlying iframe page
 def get_video_url(iframe_url, base_url=BASE_URL):
     # Step 1: Fetch the iframe page
@@ -179,3 +357,4 @@ def get_video_url(iframe_url, base_url=BASE_URL):
                 print("JS execution failed:", e)
     
     return None
+ """
