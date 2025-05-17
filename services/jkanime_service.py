@@ -29,7 +29,7 @@ class JKAnimeService:
         """
         return self.__scraper.get_video_servers(anime_id, episode)
     
-    def get_episodes_by_anime_id(self, anime_id: Union[str, int], page: int = 1) -> Dict:
+    async def get_episodes_by_anime_id(self, anime_id: Union[str, int], page: int = 1) -> Dict:
         """
         Get episodes for an anime with pagination
         Returns a dictionary containing episodes and pagination info
@@ -39,8 +39,13 @@ class JKAnimeService:
             start_episode = ((page - 1) * self.EPISODES_PER_PAGE) + 1
             end_episode = page * self.EPISODES_PER_PAGE
 
-            # Scrap episodes for the current page
-            episodes = self.__scraper.get_episodes_by_anime_id(anime_id, page)
+             # Scrap episodes for the current page
+            result = await self.__scraper.get_episodes_by_anime_id(anime_id, page)
+            
+            if not result['episodes']:
+                raise Exception(f"No episodes found for anime {anime_id} on page {page}")
+                
+            return result
         except Exception as e:
             raise Exception(f"Error fetching episodes: {str(e)}")
 

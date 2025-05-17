@@ -19,8 +19,14 @@ class EpisodeListResource(Resource):
             if page < 1:
                 return {'error': 'Page number must be grater than 0'}, HTTPStatus.BAD_REQUEST
             
+            # Create event loop for async operations
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
             # Get episodes with pagination
-            result = self.service.get_episodes_by_anime_id(anime_id, page)
+            result = loop.run_until_complete(
+                self.service.get_episodes_by_anime_id(anime_id, page)
+            )
 
             if result['episodes']:
                 return {

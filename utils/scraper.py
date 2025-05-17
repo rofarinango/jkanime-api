@@ -232,31 +232,73 @@ class JKAnimeScraper:
             results.append(anime)
         return results
     
-    
-    def get_episodes_by_anime_id(self, anime_id: Union[str, int], page: int) -> Dict:
-        response = self._scraper.get(f"{BASE_URL}{anime_id}")
-        soup = BeautifulSoup(response.text, "lxml")
-        anime_pagination = soup.find("div", class_='anime__pagination')
-        # Find the a tag with the pagination number of page input
-        pages = anime_pagination.find_all("a", class_="numbers")
-        if pages:
+    @alru_cache(maxsize=100)
+    async def get_episodes_by_anime_id(self, anime_id: Union[str, int], page: int) -> Dict:
+        try:
+            response = self._scraper.get(f"{BASE_URL}{anime_id}")
+            soup = BeautifulSoup(response.text, "lxml")
+            anime_pagination = soup.find("div", class_='anime__pagination')
+            if not anime_pagination:
+                print(f"DEBUG: No pagination found for {anime_id}")
+                return {'episodes': [], 'pagination': {}}
+            # Find the a tag with the pagination number of page input
+            pages = anime_pagination.find_all("a", class_="numbers")
+            if not pages:
+                print(f"DEBUG: No page numbers found for {anime_id}")
+                return {'episodes': [], 'pagination': {}}
+
+            # Find the requested page
+            target_page = None
             for item in pages:
                 if item.get('href') == f"#pag{page}":
-                    episode_range = item.text.strip()
-                    if episode_range:
-                        start, end = map(int, episode_range.split('-'))
-                        episode_numbers = list(range(start, end+1))
-                        print(f"Episodes for page {page}: {episode_numbers}")
-            # Call get_video_servers to get all urls from each episode
+                    target_page = item
+                    break
+
+            if not target_page:
+                print(f"DEBUG: Page {page} not found for {anime_id}")
+                return {'episodes': [], 'pagination': {}}
+
+            # Get episode range
+            episode_range = target_page.text.strip()
+            if not episode_range:
+                print(f"DEBUG: No episode range found for page {page}")
+                return {'episodes': [], 'pagination': {}}
+
+            try:
+                start, end = map(int, episode_range.split('-'))
+                episode_numbers = list(range(start, end+1))
+                print(f"DEBUG: Episodes for page {page}: {episode_numbers}")
+            except ValueError as e:
+                print(f"DEBUG: Invalid episode range format: {episode_range}")
+                return {'episodes': [], 'pagination': {}}
+
+             # Process episodes sequentially with a small delay
             episodes = []
-            pass
-     
-        """ for number in episode_numbers:
-             servers_list = self.get_video_servers(anime_id, number)
-             print("######### SERVEEEERSS #########")
-             print(servers_list)
-             episodes.append(servers_list)
-         print(episodes) """
+            for number in episode_numbers:
+                try:
+                    # Add a small delay between requests (0.5 seconds)
+                    await asyncio.sleep(0.5)
+                    episode_data = await self.get_video_servers(anime_id, number)
+                    if episode_data:  # Only add if we got data
+                        episodes.append(episode_data)
+                    print(f"DEBUG: Got data for episode {number}")
+                except Exception as e:
+                    print(f"DEBUG: Error getting episode {number}: {str(e)}")
+                    continue
+
+            return {
+                'episodes': episodes,
+                'pagination': {
+                    'current_page': page,
+                    'total_episodes': len(episode_numbers),
+                    'episode_range': f"{start}-{end}"
+                }
+            }
+
+        except Exception as e:
+            print(f"Error in get_episodes_by_anime_id: {str(e)}")
+            print(f"DEBUG: Full error details: {e.__class__.__name__}: {str(e)}")
+            return {'episodes': [], 'pagination': {}}
         
 
 """ 
