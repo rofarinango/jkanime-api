@@ -1,3 +1,4 @@
+import asyncio
 from flask_restful import Resource, reqparse
 from http import HTTPStatus
 from services.jkanime_service import JKAnimeService
@@ -36,9 +37,17 @@ class EpisodeResource(Resource):
     
     def get(self, anime_id: str, number: int):
         try:
-            episode = self.service.get_video_servers(anime_id, number)
-            if episode:
-                return {'data': episode}
+            # Create event loop for async operations
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            # Run the async function
+
+            search_results = loop.run_until_complete(
+                self.service.get_video_servers(anime_id, number)
+            )
+            if search_results:
+                return {'data': search_results}
             return {'message': 'episode not found'}, HTTPStatus.NOT_FOUND
         
         except Exception as e:
