@@ -5,8 +5,17 @@ from utils.scraper import JKAnimeScraper
 
 class JKAnimeService:
     EPISODES_PER_PAGE = 12
+    _instance = None
+    _initialized = False
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(JKAnimeService, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self):
-        self.__scraper = JKAnimeScraper()
+        if not self._initialized:
+            self.__scraper = JKAnimeScraper()
+            self._initialized = True
     
     def search_anime(self, query: str, page: int) -> List[Anime]:
         """
