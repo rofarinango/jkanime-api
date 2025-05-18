@@ -17,6 +17,13 @@ class JKAnimeService:
             self.__scraper = JKAnimeScraper()
             self._initialized = True
     
+    def get_all(self, page: int):
+        """
+        Returns all titles by pagination
+        """
+        return self.__scraper.get_all(page)
+
+    
     def search_anime(self, query: str, page: int) -> List[Anime]:
         """
         Search for anime by query and page number
