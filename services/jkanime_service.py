@@ -21,7 +21,31 @@ class JKAnimeService:
         """
         Returns all titles by pagination
         """
-        return self.__scraper.get_all(page)
+        try:
+            titles = self.__scraper.get_all(page)
+
+            # Convert the raw data into Anime objects
+            anime_list = []
+            for anime_data in titles:
+                anime = Anime(
+                    id=anime_data.get('id'),
+                    title=anime_data.get('title'),
+                    image=anime_data.get('image'),
+                    synopsis=anime_data.get('synopsis'),
+                    type=anime_data.get('type')
+                )
+                anime_list.append(anime.data)
+            
+            return {
+                'titles': anime_list,
+                'pagination': {
+                    'current_page': page,
+                    'total_items': len(anime_list)
+                }
+            }
+        except Exception as e:
+            raise Exception(f"Error fetching titles: {str(e)}")
+        
 
     
     def search_anime(self, query: str, page: int) -> List[Anime]:
