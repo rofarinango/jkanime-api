@@ -9,7 +9,7 @@ from typing import List, Dict, Optional, Type, Union
 from types import TracebackType
 from models.anime import Anime
 from models.episode import Episode
-from core.constants import BASE_URL, SEARCH_URL
+from core.constants import BASE_URL, SEARCH_URL, DIRECTORY_URL
 from async_lru import alru_cache
 
 class JKAnimeScraper:
@@ -107,33 +107,6 @@ class JKAnimeScraper:
             print(f"Error getting video servers: {str(e)}")
             return []
 
-        """ response = self._scraper.get(f"{BASE_URL}{id}/{episode}")
-        soup = BeautifulSoup(response.text, "lxml")
-        scripts = soup.find_all("script")
-
-        servers = []              
-        # Find the script with 'var video = [];'
-        for script in scripts:
-            content = script.string or script.text
-            if content and "var video = [];" in content:
-                # Extract all iframe src URLs
-                matches = re.findall(r"video\[(\d+)\] = '<iframe class=\"player_conte\" src=\"([^\"]+)\"", content)
-                for idx, iframe_url in matches:
-                    servers.append({'iframe': iframe_url})
-                
-                # Extract the servers array
-                servers_match = re.search(r"var servers = (\[.*?\]);", content, re.DOTALL)
-                if servers_match:
-                    servers_json = servers_match.group(1)
-                    servers_data = json.loads(servers_json)
-                    for server in servers_data:
-                        if server['server'] != 'Mediafire': #Skip as is direct donwload
-                            iframe_url = f"/c1.php?u={server['remote']}&s={server['server'].lower()}"
-                            servers.append({'iframe': iframe_url})
-        server_list = []
-        for i, server in enumerate(servers):
-            server_list.append(get_video_url(server['iframe']))
-        return server_list """
 
     @alru_cache(maxsize=100)
     async def _get_video_url_async(self, iframe_url: str) -> Optional[Dict[str, str]]:
@@ -300,61 +273,47 @@ class JKAnimeScraper:
             print(f"DEBUG: Full error details: {e.__class__.__name__}: {str(e)}")
             return {'episodes': [], 'pagination': {}}
         
+    def get_all(self, page):
+        """
+        Get titles by query page
+        :param page: pagination number
+        """
+        try:
+            print(f"DEBUG: Fetching data for page number {page} in directory")
 
-""" 
-# Helper function to get the video url requesting the underlying iframe page
-def get_video_url(iframe_url, base_url=BASE_URL):
-    # Step 1: Fetch the iframe page
-    scraper = cloudscraper.create_scraper()
-    # If the iframe is relative, prepend the base_url
-    if iframe_url.startswith('/'):
-        iframe_url = base_url.rstrip('/') + iframe_url
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Referer': base_url,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-    }
-    response = scraper.get(iframe_url, headers=headers)
-    soup = BeautifulSoup(response.text, "lxml")
+            response = self._scraper.get(f"{DIRECTORY_URL}/{page}")
+            soup = BeautifulSoup(response.text, "lxml")
 
-    # Step 1.5: Check if the response contains an iframe with a direct video URL
-    # Get server name from script tag
-    script_tag = soup.find('script')
-    if script_tag:
-        script_content = script_tag.string or script_tag.text
-        match = re.search(r"var servername = \"([^\"]+)\";", script_content)
-        if match:
-            server_name = match.group(1)
-        else:
-            server_name = None
+            # Extract animes variable content
+            titles = None
+            target_script = soup.find("script", string=lambda s: s and "var animes =" in s)
+            print(target_script)
+            if not target_script:
+                return []
+            
+            # Extract the animes array from the script contents
+            script_content = target_script.string
+            start_marker = "var animes ="
+            start_idx = script_content.find(start_marker)
+            start_idx += len(start_marker)
+            print(start_idx)
+            end_idx = script_content.find("var mode =")
+            print(end_idx)
+            if end_idx == -1:
+                end_idx = script_content.find("function anime_status")
 
-    iframe = soup.find('iframe')
-    if iframe and iframe.has_attr('src'):
-        video_url = iframe['src']
-        if video_url.startswith('http'):
-            return {'server': server_name, 'url': video_url}
-    
-    # Step 3: If not, try extract and run the obfuscated JS
-    scripts = soup.find('script')
-    if len(scripts) > 1:
-        script_content = scripts[1].string or scripts[1].text
-        if script_content:
-            # Try to extract the assignment to ss (the video URL)
-            # regex it out:
-            match = re.search(r"ss\s*=\s*['\"]([^'\"]+)['\"]", script_content)
-            if match:
-                return {'server': server_name, 'url': match.group(1)}
-            # Otherwise, try to run the JS (if it's not too obfuscated)
-            try:
-                context = js2py.EvalJs()
-                context.execute(script_content)
-                if hasattr(context, 'ss'):
-                    return {'server': server_name, 'url': context.__subclasshook__ }
-            except Exception as e:
-                print("JS execution failed:", e)
-    
-    return None
- """
+            animes_json = script_content[start_idx:end_idx].strip()
+            print(animes_json)
+            if animes_json.endswith(";"):
+                animes_json = animes_json[:-1]
+            
+            # Parse the JSON data
+            titles = json.loads(animes_json)
+            print(f"DEBUG: Found {len(titles)} titles")
+            print(titles)
+            return titles
+        
+
+        except Exception as e:
+            print(f"Error getting titles: {str(e)}")
+            return []
