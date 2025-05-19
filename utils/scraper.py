@@ -9,7 +9,7 @@ from typing import List, Dict, Optional, Type, Union
 from types import TracebackType
 from models.anime import Anime
 from models.episode import Episode
-from core.constants import BASE_URL, SEARCH_URL
+from core.constants import BASE_URL, SEARCH_URL, DIRECTORY_URL
 from async_lru import alru_cache
 
 class JKAnimeScraper:
@@ -274,4 +274,46 @@ class JKAnimeScraper:
             return {'episodes': [], 'pagination': {}}
         
     def get_all(self, page):
-        pass
+        """
+        Get titles by query page
+        :param page: pagination number
+        """
+        try:
+            print(f"DEBUG: Fetching data for page number {page} in directory")
+
+            response = self._scraper.get(f"{DIRECTORY_URL}/{page}")
+            soup = BeautifulSoup(response.text, "lxml")
+
+            # Extract animes variable content
+            titles = None
+            target_script = soup.find("script", string=lambda s: s and "var animes =" in s)
+            print(target_script)
+            if not target_script:
+                return []
+            
+            # Extract the animes array from the script contents
+            script_content = target_script.string
+            start_marker = "var animes ="
+            start_idx = script_content.find(start_marker)
+            start_idx += len(start_marker)
+            print(start_idx)
+            end_idx = script_content.find("var mode =")
+            print(end_idx)
+            if end_idx == -1:
+                end_idx = script_content.find("function anime_status")
+
+            animes_json = script_content[start_idx:end_idx].strip()
+            print(animes_json)
+            if animes_json.endswith(";"):
+                animes_json = animes_json[:-1]
+            
+            # Parse the JSON data
+            titles = json.loads(animes_json)
+            print(f"DEBUG: Found {len(titles)} titles")
+            print(titles)
+            return titles
+        
+
+        except Exception as e:
+            print(f"Error getting titles: {str(e)}")
+            return []
