@@ -89,7 +89,7 @@ class JKAnimeScraper:
                 try:
                     servers_data = json.loads(servers_match.group(1))
                     for server in servers_data:
-                        iframe_url = f"/c1.php?u={server['remote']}&s={server['server'].lower()}"
+                        iframe_url = f"/c1?u={server['remote']}&s={server['server'].lower()}"
                         servers.append({'iframe': iframe_url})
                 except json.JSONDecodeError:
                     pass
@@ -119,7 +119,7 @@ class JKAnimeScraper:
 
             
             if iframe_url.startswith('/'):
-                iframe_url = BASE_URL.rstrip('/') + iframe_url
+                iframe_url = BASE_URL.rstrip('/') + "/jkplayer" + iframe_url
             
             # Create a new session for each request
             async with aiohttp.ClientSession() as session:
